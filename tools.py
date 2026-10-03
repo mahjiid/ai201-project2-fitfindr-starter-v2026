@@ -169,8 +169,59 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    items = wardrobe.get("items", [])
+    title = new_item.get("title", "this item")
+    item_details = (
+        f"Item: {title}\n"
+        f"Category: {new_item.get('category', 'unknown')}\n"
+        f"Colors: {', '.join(new_item.get('colors', [])) or 'not listed'}\n"
+        f"Style tags: {', '.join(new_item.get('style_tags', [])) or 'not listed'}"
+    )
+
+    if not items:
+        prompt = (
+            f"{item_details}\n\n"
+            "The user has no saved wardrobe items yet. Suggest one or two "
+            "general ways to style this thrift item. Be practical and concise, "
+            "and mention useful colors, layers, footwear, or accessories."
+        )
+        response = generate(
+            prompt,
+            system=(
+                "You are FitFindr's styling tool. Give practical styling advice "
+                "for the exact item provided. Do not pretend the user owns items "
+                "that are not listed."
+            ),
+        )
+        return response.strip() or f"Try styling {title} with simple neutral basics."
+
+    wardrobe_lines = []
+    for item in items:
+        wardrobe_lines.append(
+            "- "
+            + item.get("name", "Unnamed item")
+            + f" | category: {item.get('category', 'unknown')}"
+            + f" | colors: {', '.join(item.get('colors', [])) or 'not listed'}"
+            + f" | style: {', '.join(item.get('style_tags', [])) or 'not listed'}"
+            + (f" | notes: {item['notes']}" if item.get("notes") else "")
+        )
+
+    prompt = (
+        f"{item_details}\n\n"
+        "The user already owns these wardrobe pieces:\n"
+        + "\n".join(wardrobe_lines)
+        + "\n\nSuggest one or two outfits using the thrift item plus pieces "
+        "from this wardrobe. Name the saved wardrobe pieces exactly so the "
+        "suggestion is easy to follow. Do not invent additional owned pieces."
+    )
+    response = generate(
+        prompt,
+        system=(
+            "You are FitFindr's styling tool. Build concise, wearable outfits "
+            "from the supplied thrift listing and the user's actual wardrobe."
+        ),
+    )
+    return response.strip() or f"Pair {title} with one of your neutral wardrobe basics."
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
