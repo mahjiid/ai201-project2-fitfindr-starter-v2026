@@ -20,7 +20,9 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
-import config  # noqa: F401 — you'll use this in search_listings
+import re
+
+import config
 from generate import generate
 from utils.data_loader import load_listings
 
@@ -78,8 +80,63 @@ def search_listings(
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    listings = load_listings()
+
+    def size_matches(listing_size: str, requested_size: str) -> bool:
+        requested = requested_size.strip().upper()
+        actual = listing_size.strip().upper()
+
+        if not requested:
+            return True
+        if requested == actual:
+            return True
+
+        standard_sizes = {"XXS", "XS", "S", "M", "L", "XL", "XXL"}
+        if requested in standard_sizes:
+            actual_sizes = set(
+                re.findall(r"(?<![A-Z])(XXS|XXL|XL|XS|S|M|L)(?![A-Z])", actual)
+            )
+            return requested in actual_sizes
+
+        requested_numbers = re.findall(r"\d+(?:\.\d+)?", requested)
+        actual_numbers = re.findall(r"\d+(?:\.\d+)?", actual)
+        if requested_numbers:
+            return requested_numbers[0] in actual_numbers
+
+        requested_tokens = set(re.findall(r"[A-Z0-9.]+", requested))
+        actual_tokens = set(re.findall(r"[A-Z0-9.]+", actual))
+        return bool(requested_tokens) and requested_tokens.issubset(actual_tokens)
+
+    query_terms = set(re.findall(r"[a-z0-9]+", description.lower()))
+    if not query_terms:
+        return []
+
+    scored: list[tuple[int, dict]] = []
+
+    for listing in listings:
+        if max_price is not None and float(listing["price"]) > float(max_price):
+            continue
+        if size is not None and not size_matches(str(listing["size"]), size):
+            continue
+
+        searchable_parts = [
+            listing.get("title", ""),
+            listing.get("description", ""),
+            listing.get("category", ""),
+            " ".join(listing.get("style_tags", [])),
+            " ".join(listing.get("colors", [])),
+            listing.get("brand") or "",
+            listing.get("platform", ""),
+        ]
+        listing_terms = set(
+            re.findall(r"[a-z0-9]+", " ".join(searchable_parts).lower())
+        )
+        score = len(query_terms & listing_terms)
+        if score > 0:
+            scored.append((score, listing))
+
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    return [listing for _, listing in scored[: config.SEARCH_RESULT_LIMIT]]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
