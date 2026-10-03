@@ -47,36 +47,26 @@
 
 ## Tool Inventory
 
-<!-- Four lines per tool. This is worth 2 points and it's the single most
-     common place students lose them.
-
-     "Returns a list" earns NOTHING. The description has to say what is IN
-     the list.
-
-     The empty case isn't optional either — it's the thing your loop branches
-     on, and if you don't decide it here you'll discover it as a crash in
-     Milestone 5. -->
-
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Searches the local listings dataset for items that match the requested description, with optional size and maximum-price filters.
+- **Inputs:** `description` (str), `size` (str | None), `max_price` (float | None). Size matching is case-insensitive; slash-separated clothing sizes may match either component, while numeric shoe sizes must match the requested numeric size rather than by substring.
+- **Returns:** A list of listing dictionaries ordered by keyword-overlap score, best match first, limited to `config.SEARCH_RESULT_LIMIT`. Each dictionary contains `id`, `title`, `description`, `category`, `style_tags`, `size`, `condition`, `price`, `colors`, `brand`, and `platform`.
+- **When it has nothing:** Returns an empty list `[]`; it does not return `None` and does not raise just because there are no matches.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Uses the selected thrift listing and the user's wardrobe to generate one or two practical outfit ideas.
+- **Inputs:** `new_item` (dict) containing one listing, and `wardrobe` (dict) containing an `items` list of saved wardrobe pieces.
+- **Returns:** A non-empty string with outfit suggestions. When wardrobe items exist, the response should name pieces the user already owns.
+- **When it has nothing:** If `wardrobe["items"]` is empty, returns general styling advice for the selected item instead of failing or returning an empty string.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+- **What it does:** Turns the selected item and outfit suggestion into a short social-style caption for the thrift find.
+- **Inputs:** `outfit` (str) and `new_item` (dict).
+- **Returns:** A non-empty two-to-four sentence caption that mentions the item, its price, its platform, and the overall styling vibe.
+- **When it has nothing:** If `outfit` is empty or whitespace, returns a descriptive fallback message rather than raising an exception.
 
 ---
 
@@ -93,13 +83,13 @@
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rule:**
+**Branch rule:** If `search_listings` returns an empty list, store a useful message in `session["error"]` telling the user to broaden the description, change the size, or raise the budget, then return immediately. Otherwise, select the first search result and continue to `suggest_outfit`, then `create_fit_card`.
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** Regex and string cleanup: extract an optional price ceiling from phrases such as `under $30`, extract an optional size from phrases such as `size M`, and use the remaining words as the search description.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** `query` → `parsed` → `search_results` → `selected_item` → `outfit_suggestion` → `fit_card`. If search returns nothing, `error` is set and the later fields remain unchanged.
 
 ---
 
