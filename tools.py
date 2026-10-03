@@ -260,5 +260,39 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return (
+            f"No fit card was created for {new_item.get('title', 'this item')} "
+            "because there was no outfit suggestion to describe."
+        )
+
+    title = new_item.get("title", "thrift find")
+    price = float(new_item.get("price", 0))
+    platform = new_item.get("platform", "the listing platform")
+    style_tags = ", ".join(new_item.get("style_tags", [])) or "thrifted"
+
+    prompt = (
+        f"Item: {title}\n"
+        f"Price: ${price:.2f}\n"
+        f"Platform: {platform}\n"
+        f"Style tags: {style_tags}\n"
+        f"Outfit suggestion: {outfit.strip()}\n\n"
+        "Write a social caption of exactly 2 to 4 sentences. Mention the item, "
+        "the exact price, and the platform once each. Describe a specific styling "
+        "vibe based on the outfit. Keep it natural, concise, and post-ready."
+    )
+    response = generate(
+        prompt,
+        system=(
+            "You write short FitFindr social captions. Follow the requested "
+            "length and factual listing details exactly; do not invent prices, "
+            "platforms, brands, or wardrobe pieces."
+        ),
+    )
+    if response.strip():
+        return response.strip()
+
+    return (
+        f"{title} for ${price:.2f} on {platform}. "
+        f"Styled with {outfit.strip()} for a {style_tags} vibe."
+    )
