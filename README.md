@@ -39,9 +39,7 @@
 
 ## What This Does
 
-<!-- Three or four sentences: what a user asks for, and what they get back. -->
-
-
+FitFindr takes a natural-language request for a thrift item, such as a vintage graphic tee under a certain price, and searches the local listings dataset for matching items. It chooses the best result, carries that selected listing through session state, and uses the user's saved wardrobe to suggest one or two outfits. It then turns the selected item and outfit suggestion into a short social-style fit card. If the search returns no matches, the agent stops before calling the later tools and tells the user what they can change in the request.
 
 ---
 
@@ -95,57 +93,80 @@
 
 ## Sample Run
 
-<!-- Two things go here.
-
-     1. One FULL query and its output, pasted as text.
-     2. Your three per-tool terminal tests — the command and what it printed. -->
-
 **One full query**
 
-```
-$ python app.py ask '...'
+```text
+$ python app.py ask 'vintage graphic tee under $30'
 
+Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+Outfit:   ### Outfit 1: Y2K Streetwear Contrast
+
+Pair the tight, graphic Y2K baby tee with relaxed denim for a classic early-2000s silhouette.
+
+* Top: Y2K Baby Tee — Butterfly Print
+* Bottoms: Baggy straight-leg jeans, dark wash
+* Outerwear: Vintage black denim jacket
+* Shoes: Chunky white sneakers
+* Accessories: Black crossbody bag
+
+### Outfit 2: Retro Casual Prep
+
+Balance the pastel butterfly print against neutral earth tones for an easy, everyday look.
+
+* Top: Y2K Baby Tee — Butterfly Print
+* Bottoms: Wide-leg khaki trousers
+* Accessories: Brown leather belt, Black crossbody bag
+* Shoes: Chunky white sneakers
+
+Fit card: Channel early-2000s streetwear vibes by styling this Y2K Baby Tee with baggy dark wash jeans and chunky white sneakers. Grab this vintage graphic piece on depop for just $18.00.
+
+2 model calls this session, 700 prompt + 226 output tokens
 ```
 
 **The three tools, tested one at a time**
 
-```
-$ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
-
-```
-
-```
-$ python -c "from tools import suggest_outfit; ..."
-
+```text
+$ python -c "from tools import search_listings; print([(x['title'], x['price']) for x in search_listings('graphic tee', max_price=30)])"
+[('Y2K Baby Tee — Butterfly Print', 18.0), ('Graphic Tee — 2003 Tour Bootleg Style', 24.0), ('Mesh Long-Sleeve Top — Black', 15.0), ('Vintage Band Tee — Faded Grey', 19.0), ('Low-Rise Cargo Pants — Khaki', 27.0), ('Vintage Graphic Hoodie — Faded Black', 26.0)]
 ```
 
+```text
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()).replace(chr(10), ' '))"
+### Outfit: Vintage Streetwear Layer  * Thrift Item: Vintage Levi's 501 Jeans — Medium Wash * Top: White ribbed tank top * Outerwear: Vintage black denim jacket * Shoes: Chunky white sneakers * Accessories: Black crossbody bag  Why it works: The fitted white tank balances the straight-leg vintage denim, while the slightly cropped black denim jacket adds a cool double-denim contrast without overwhelming the frame. Finished with chunky sneakers and a minimal crossbody for an effortless, everyday streetwear look.
 ```
-$ python -c "from tools import create_fit_card; ..."
 
+```text
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]).replace(chr(10), ' '))"
+Grab these classic Vintage Levi's 501 Jeans in a timeless medium wash for just $38.00 on depop. Channel effortless streetwear energy by pairing them with crisp white sneakers for an instantly cool, everyday look. Add this essential denim staple to your rotation today!
+```
+
+**Empty-search branch**
+
+```text
+$ python app.py ask 'designer ballgown size XXS under $5'
+
+I couldn't find a matching listing. Try broadening the description, changing the size, or raising the maximum price.
+
+0 model calls this session
 ```
 
 ---
 
 ## How I Used AI
 
-<!-- Two specific moments. What you asked, what came back, what you changed.
-
-     "I used Claude to help me code" is not enough.
-
-     "I gave Claude my search_listings spec. It returned None on no match
-     instead of an empty list, so I changed it" is the level we want. -->
-
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked AI to review the FitFindr tool requirements and help turn them into precise tool specifications before implementation.
+- *What came back:* It proposed explicit input types, return shapes, empty-case behavior, and warned that simple substring size matching could confuse values such as `L` and `XL` or clothing sizes and shoe sizes.
+- *What I changed:* I kept the starter's required empty-list behavior and implemented case-insensitive size matching using standard-size tokens and exact numeric size tokens instead of a plain substring test.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* I asked AI to help structure the planning loop so the branch and session state would be visible and testable instead of being three unconditional function calls.
+- *What came back:* It suggested a small state-machine loop with separate search, outfit, and fit-card steps and an early return when search results are empty.
+- *What I changed:* I stored each result in the session before the next step reads it, used `session["selected_item"]` as the input to `suggest_outfit`, and added an actionable empty-search message before returning early.
+
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
