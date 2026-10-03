@@ -13,6 +13,8 @@ Build and test your three tools in `tools.py` first. Then come here.
     python agent.py          runs both example paths below
 """
 
+import re
+
 import config
 import trace
 from tools import search_listings, suggest_outfit, create_fit_card
@@ -107,8 +109,86 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     """
     session = new_session(query, wardrobe)
 
-    # TODO: delete these two lines and build the loop.
-    session["error"] = "The planning loop isn't built yet — see the TODO in agent.py."
+    price_match = re.search(
+        r"\b(?:under|below|up to|max(?:imum)?(?: of)?|less than)\s*\$?\s*(\d+(?:\.\d+)?)",
+        query,
+        flags=re.IGNORECASE,
+    )
+    size_match = re.search(
+        r"\b(?:size|sz)\s*[:=]?\s*([a-z0-9]+(?:[./][a-z0-9]+)?)\b",
+        query,
+        flags=re.IGNORECASE,
+    )
+
+    max_price = float(price_match.group(1)) if price_match else None
+    size = size_match.group(1).upper() if size_match else None
+
+    description = query
+    if price_match:
+        description = description.replace(price_match.group(0), " ")
+    if size_match:
+        description = description.replace(size_match.group(0), " ")
+
+    description = re.sub(
+        r"\b(?:looking for|find me|show me|i want|i need|please)\b",
+        " ",
+        description,
+        flags=re.IGNORECASE,
+    )
+    words = re.findall(r"[A-Za-z0-9'-]+", description)
+    filler = {"a", "an", "the", "for", "me"}
+    description = " ".join(word for word in words if word.lower() not in filler).strip()
+
+    session["parsed"] = {
+        "description": description,
+        "size": size,
+        "max_price": max_price,
+    }
+
+    next_step = "search"
+    iterations = 0
+
+    while next_step:
+        iterations += 1
+        trace.check_iterations(iterations)
+
+        if next_step == "search":
+            parsed = session["parsed"]
+            session["search_results"] = search_listings(
+                parsed["description"],
+                size=parsed["size"],
+                max_price=parsed["max_price"],
+            )
+
+            if not session["search_results"]:
+                session["error"] = (
+                    "I couldn't find a matching listing. Try broadening the "
+                    "description, changing the size, or raising the maximum price."
+                )
+                return session
+
+            session["selected_item"] = session["search_results"][0]
+            next_step = "outfit"
+            continue
+
+        if next_step == "outfit":
+            session["outfit_suggestion"] = suggest_outfit(
+                session["selected_item"],
+                session["wardrobe"],
+            )
+            next_step = "fit_card"
+            continue
+
+        if next_step == "fit_card":
+            session["fit_card"] = create_fit_card(
+                session["outfit_suggestion"],
+                session["selected_item"],
+            )
+            next_step = None
+            continue
+
+        raise RuntimeError(f"Unknown planning step: {next_step}")
+
     return session
 
 
