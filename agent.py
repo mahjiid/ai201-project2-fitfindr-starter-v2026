@@ -146,6 +146,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         "max_price": max_price,
     }
 
+    trace.step("parse_query", inputs=query, returned=session["parsed"])
+
     next_step = "search"
     iterations = 0
 
@@ -155,39 +157,82 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
         if next_step == "search":
             parsed = session["parsed"]
-            session["search_results"] = call_tool(
-                "search_listings",
-                {
-                    "description": parsed["description"],
-                    "size": parsed["size"],
-                    "max_price": parsed["max_price"],
-                },
-            )
+            try:
+                session["search_results"] = call_tool(
+                    "search_listings",
+                    {
+                        "description": parsed["description"],
+                        "size": parsed["size"],
+                        "max_price": parsed["max_price"],
+                    },
+                )
+            except Exception as exc:
+                from mcp_client import MCPError
+                if not isinstance(exc, MCPError):
+                    raise
+                session["error"] = (
+                    "Listing search is temporarily unavailable. Please retry later "
+                    "or check that the MCP server can start."
+                )
+                trace.step("search_listings (via MCP)", inputs=parsed, returned=str(exc),
+                           note="MCP unavailable; stop")
+                return session
+            trace.step("search_listings (via MCP)", inputs=parsed,
+                       returned=session["search_results"])
 
             if not session["search_results"]:
                 session["error"] = (
                     "I couldn't find a matching listing. Try broadening the "
                     "description, changing the size, or raising the maximum price."
                 )
+                trace.step("empty_search_branch", returned=session["error"], note="stop before suggest_outfit")
                 return session
 
             session["selected_item"] = session["search_results"][0]
+            trace.step("select_item", returned=session["selected_item"], note="stored in session")
             next_step = "outfit"
             continue
 
         if next_step == "outfit":
-            session["outfit_suggestion"] = suggest_outfit(
-                session["selected_item"],
-                session["wardrobe"],
-            )
+            try:
+                session["outfit_suggestion"] = suggest_outfit(
+                    session["selected_item"],
+                    session["wardrobe"],
+                )
+            except ModelUnavailable:
+                session["error"] = (
+                    "Outfit suggestions are temporarily unavailable because the "
+                    "AI model could not be reached. Check your API key and connection, "
+                    "then try again."
+                )
+                trace.step("suggest_outfit", inputs=session["selected_item"],
+                           returned=session["error"], note="model unavailable; stop")
+                return session
+            trace.step("suggest_outfit", inputs={
+                "item": session["selected_item"],
+                "wardrobe_count": len(session["wardrobe"].get("items", []))
+            }, returned=session["outfit_suggestion"])
             next_step = "fit_card"
             continue
 
         if next_step == "fit_card":
-            session["fit_card"] = create_fit_card(
-                session["outfit_suggestion"],
-                session["selected_item"],
-            )
+            try:
+                session["fit_card"] = create_fit_card(
+                    session["outfit_suggestion"],
+                    session["selected_item"],
+                )
+            except ModelUnavailable:
+                session["error"] = (
+                    "The outfit was suggested, but the AI fit-card generator is "
+                    "unavailable. Check your API key and connection, then retry."
+                )
+                trace.step("create_fit_card", inputs=session["outfit_suggestion"],
+                           returned=session["error"], note="model unavailable; stop")
+                return session
+            trace.step("create_fit_card", inputs={
+                "outfit": session["outfit_suggestion"],
+                "item": session["selected_item"],
+            }, returned=session["fit_card"])
             next_step = None
             continue
 
