@@ -35,6 +35,24 @@ SCENARIOS = [
         "wardrobe": "empty",
         "criterion": None,
     },
+    {
+        "name": "selected item persists into outfit step",
+        "query": "vintage graphic tee under $30",
+        "wardrobe": "example",
+        "criterion": 3,
+    },
+    {
+        "name": "fit card includes item price platform and vibe",
+        "query": "vintage graphic tee under $30",
+        "wardrobe": "example",
+        "criterion": 4,
+    },
+    {
+        "name": "all search results obey price ceiling",
+        "query": "vintage graphic tee under $20",
+        "wardrobe": "example",
+        "criterion": 5,
+    },
     # TODO: add what your criteria 3, 4 and 5 need.
     #
     # Set "criterion" to the number in criteria.md that the scenario tests.
