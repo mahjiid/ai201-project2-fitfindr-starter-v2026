@@ -189,7 +189,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                 return session
 
             session["selected_item"] = session["search_results"][0]
-            trace.step("select_item", returned=session["selected_item"], note="stored in session")
+            trace.step("select_item", returned=session["selected_item"],
+                       note=f"stored item id={session['selected_item']['id']}")
             next_step = "outfit"
             continue
 
@@ -211,7 +212,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             trace.step("suggest_outfit", inputs={
                 "item": session["selected_item"],
                 "wardrobe_count": len(session["wardrobe"].get("items", []))
-            }, returned=session["outfit_suggestion"])
+            }, returned=session["outfit_suggestion"],
+                       note=f"received new_item id={session['selected_item']['id']}")
             next_step = "fit_card"
             continue
 
