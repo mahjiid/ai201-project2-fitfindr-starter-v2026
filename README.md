@@ -168,6 +168,12 @@ I couldn't find a matching listing. Try broadening the description, changing the
 - *What I changed:* I stored each result in the session before the next step reads it, used `session["selected_item"]` as the input to `suggest_outfit`, and added an actionable empty-search message before returning early.
 
 
+**Unit 4 — Testing assistance**
+
+- *What I asked for:* Help instrument MCP calls and agent traces, construct five repeatable acceptance scenarios, and inspect real before/after logs against my existing criteria.
+- *What came back:* Suggestions to trace tool inputs and outputs, handle an unavailable model with actionable messages, and measure literal title retention as a separate diagnostic.
+- *What I changed:* Kept the original acceptance targets, verified the actual tests and errors, changed only the fit-card prompt for the measured improvement, and preserved the full output files for review.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
@@ -177,134 +183,130 @@ I couldn't find a matching listing. Try broadening the description, changing the
 
 ## Run Log — Before
 
-<!-- Five criteria, five tries each, in this exact format.
-
-     Five, because your criteria are written out of five. Mark each try PASS
-     or FAIL, count the passes, and read that count against your target — a
-     row targeting 4 of 5 with three PASS cells is MISSED (3/5).
-
-     `python run_eval.py --label before` runs everything and writes the table
-     into results/. Paste it here and fill in the verdicts. -->
+This is the full baseline captured **before** the one prompt improvement. Original acceptance targets in `criteria.md` were preserved. Every scenario was run five times with cache disabled using `run_eval.py::main`; all agent decisions came from `agent.py::run_agent`. The full unedited evidence, including individual outfit suggestions, fit cards, and step-by-step traces, is in [the baseline report](results/run_2026-10-10_2130_before.md).
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 2. Impossible query stops before second tool | 5/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 3. Selected item ID reaches suggest_outfit unchanged | 4/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 4. Fit card has 2–4 sentences, item, price, platform, vibe | 4/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 5. No returned listing exceeds price ceiling | 5/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
 
-**Real output from one try**, pasted as text, naming the file and function
-that produced it:
+**Representative real output for each criterion** (from the full baseline log, unless noted):
 
-```
+1. **Three-tool run —** `run_eval.py::run_once`, `agent.py::run_agent`: search returned 10 listings, selected `lst_002`, then called `suggest_outfit` and `create_fit_card`. The complete first card was: “Embrace authentic Y2K proportions with this butterfly print baby tee, featuring a fitted, cropped silhouette that balances perfectly with baggy dark-wash jeans. Grab this nostalgic piece on depop for just $18.00 to complete your go-to streetwear look. Pair it with chunky white sneakers and a black crossbody bag for an effortless finish.”
+2. **Empty-search branch —** `agent.py::run_agent`: “I couldn't find a matching listing. Try broadening the description, changing the size, or raising the maximum price.” The trace stopped at `empty_search_branch` and did not execute either model tool.
+3. **State handoff —** `agent.py::run_agent`: `select_item → stored item id=lst_002`; `suggest_outfit → received new_item id=lst_002`. This pair matched in all five attempts, and the call site passes `session["selected_item"]` directly.
+4. **Fit-card details —** `tools.py::create_fit_card`: “Channel major 2000s energy with this Y2K Baby Tee featuring a cute butterfly print. Available now on depop for $18.00, it's the ultimate piece for a retro streetwear look when paired with baggy straight-leg denim and chunky sneakers. Grab it before it's gone!” This is three sentences and includes all four required details.
+5. **Price ceiling —** `mcp_client.py::call_tool` invoking `tools.py::search_listings`: independent repeat checks gave `PRICE TRY 1–5: PASS; count=8; highest=USD 20.00; limit=USD 20.00`. These inspect **every returned price**, not merely the selected first item. The checks are reproducible with `python unit4_diagnostics.py`.
 
-```
+The separately required **empty-wardrobe diagnostic** also returned nonempty styling guidance and completed a fit card in all five baseline attempts. It was not counted as a sixth acceptance criterion.
 
 ---
 
 ## Verdicts and Diagnoses
 
-<!-- MET or MISSED per criterion against LAST UNIT's target, plus a sentence on
-     how you decided.
+| # | Target | Verdict | Decision and mechanism |
+|---|---|---|---|
+| 1 | 4/5 | **MET (5/5)** | All five traces show MCP search, outfit suggestion, and card creation, with no early stop |
+| 2 | 5/5 | **MET (5/5)** | All five empty searches stopped in the loop branch before the second tool |
+| 3 | 4/5 | **MET (5/5)** | Each trace recorded matching `lst_002` IDs at selection and outfit handoff |
+| 4 | 4/5 | **MET (5/5)** | All five cards contained 3 sentences, recognizable butterfly baby tee, $18, Depop, and specific Y2K/streetwear styling |
+| 5 | 5/5 | **MET (5/5)** | The tool's per-listing filter and five independent MCP checks confirmed all eight returned prices were at or below $20 |
 
-     Then, for every miss: which of the four places it happened — a tool, the
-     loop's branch, the session, or the model's output — AND the mechanism.
+**Miss diagnosis:** No scored criterion missed its original target. The criteria were limited enough that they did not detect one consistency weakness: in the five baseline runs for criterion 4, the model **paraphrased the selected item's full title in 5/5 cards** instead of preserving the exact string `Y2K Baby Tee — Butterfly Print`. The cause was `tools.py::create_fit_card`'s *prompt wording*: it asked the model to “mention the item” but did not require a verbatim title. This was a measurable weakness in model output, not an MCP or session-state failure. I kept the original criterion and target untouched and selected this as the one improvement.
 
-     Not a diagnosis:  "The fit card was bad."
-     A diagnosis:      "The fit card criterion missed on 2 of 5 items. Both had
-                        an empty brand field. My prompt puts the brand in the
-                        first sentence, so the card opened with a blank and read
-                        like a fragment. The tool worked; the prompt assumed a
-                        field that isn't always there."
+**Three deliberately triggered failure modes:**
 
-     Look for a pattern. Three misses on the same tool is one problem, not
-     three. -->
-
-| # | Criterion | Target | Verdict | How I decided |
-|---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
-
-**Diagnoses**
-
-
+- **Empty search:** impossible `designer ballgown size XXS under $5` query; the loop returned actionable search guidance, no outfit or card; tested 5/5.
+- **Empty wardrobe:** `denim jacket under $50` with no saved pieces; `suggest_outfit` generated general advice and card; tested 5/5.
+- **Model unavailable:** `unit4_diagnostics.py` set an intentionally invalid key **only inside its own process**, disabled the cache, and invoked a real matching query. The user saw: “Outfit suggestions are temporarily unavailable because the AI model could not be reached. Check your API key and connection, then try again.” The fit card remained `None`. The real `.env` was not changed or committed.
 
 ---
 
 ## Loop Trace
 
-<!-- One full run, printed step by step, with the MCP call visible in it.
+**Full happy-path trace — real first baseline run**
 
-     `python app.py ask '...' --trace` once you've added the trace.step()
-     calls in Milestone 2.
-
-     Worth pasting BOTH the happy path and the empty-search path. The empty
-     one should be visibly shorter, because it stops. If your two traces are
-     the same length, your branch isn't working — and this is the fastest way
-     anyone will ever find that out. -->
-
-**Happy path**
-
+```text
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      →    stored item id=lst_002
+[4] suggest_outfit
+      in:  dict with keys: item, wardrobe_count
+      out: ### Outfit: Y2K Street Denim  * **Top:** Y2K Baby Tee — Butterfly Print * **Bottoms:** Baggy straight-leg jean…
+      →    received new_item id=lst_002
+[5] create_fit_card
+      in:  dict with keys: outfit, item
+      out: Embrace authentic Y2K proportions with this butterfly print baby tee, featuring a fitted, cropped silhouette t…
 ```
 
+**Empty-search trace — real baseline run**
+
+```text
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+[3] empty_search_branch
+      out: I couldn't find a matching listing. Try broadening the description, changing the size, or raising the maximum …
+      →    stop before suggest_outfit
 ```
 
-**Empty search**
-
-```
-
-```
-
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
-
-
+**MCP rewire:** `mcp_server.py` exposes exactly one registered, typed `search_listings` tool, while `agent.py::run_agent` calls it through `mcp_client.call_tool`. `python mcp_client.py` independently listed the tool and its required description / optional size / optional maximum-price inputs. The list-of-dictionaries return behavior stayed consistent; `python test.py` passed 10/10 checks.
 
 ---
 
 ## The Improvement
 
-<!-- What you changed, why your diagnosis pointed at it, and the after-run in
-     the same table format. One change, measured properly.
+**One change only:** Reworded the existing `create_fit_card` prompt in `tools.py` to require the **full, literal listing title, including punctuation, at the start of the first sentence**. No acceptance criteria, datasets, temperature, search algorithm, output filters, or other model prompts were changed.
 
-     `python run_eval.py --label after` -->
-
-**What I changed:**
-
-**Which failure it was meant to fix:**
+**Reason:** All five baseline fit-card attempts satisfied criterion 4, but none reproduced the exact title. That inconsistency can make it harder for someone to identify the precise listing. The improvement targets the prompt assumption that “mention the item” would preserve the title.
 
 ### Run Log — After
 
+Same five scenarios and original targets, five fresh attempts each, with caching off. Full verbatim outputs and traces are in [the after report](results/run_2026-10-10_2142_after.md).
+
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools | 4/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 2. Impossible query stops before second tool | 5/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 3. Selected item ID reaches suggest_outfit unchanged | 4/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 4. Fit card has 2–4 sentences, item, price, platform, vibe | 4/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
+| 5. No returned listing exceeds price ceiling | 5/5 | PASS | PASS | PASS | PASS | PASS | **MET (5/5)** |
 
-**Did it help, and how do I know:**
+**Actual after-run output for criterion 4 —** `tools.py::create_fit_card`:
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+```text
+Y2K Baby Tee — Butterfly Print is available now on depop for just $18.00! Channel ultimate turn-of-the-millennium energy by pairing it with baggy dark-wash jeans and chunky white sneakers. It's the sweetest way to elevate your everyday streetwear rotation.
+```
 
+**Did it help? Yes, on the targeted secondary measure.**
 
+| Measurement | Before | After |
+|---|---:|---:|
+| Original acceptance criteria MET | 5/5 | 5/5 |
+| Criterion 4 attempts with 2–4 sentences and all required details | 5/5 | 5/5 |
+| Criterion 4 attempts beginning with the exact full listing title | **0/5** | **5/5** |
+
+The baseline used 52 model requests including retries; after used 50. Differences in request count do not establish performance improvement because provider rate limits can fluctuate. The measured improvement is title fidelity, not speed or cost.
 
 ---
 
 ## What's Still Broken
 
-<!-- For each criterion still missed: what you'd do, and why you stopped where
-     you did. "I ran out of time" is fine if it's true. Pretending nothing is
-     left is not. -->
+**No original acceptance criterion remains missed.** There are still limits worth tracking: the model provider imposed occasional rate-limit pauses, MCP search starts a server subprocess per tool call, and the five-try scenarios reuse a small number of listing queries rather than proving behavior across a diverse catalog. Also, an exact title is now requested by prompt but is not enforced by a deterministic output validator. A larger future test suite should cover multiple item types, edge-case titles, and explicit output validation.
 
-
+I stopped after **one prompt change**, as required, so the before/after comparison isolates that one improvement. The original Unit 3 criterion definitions and repository history were preserved.
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
