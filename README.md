@@ -13,8 +13,8 @@
 > python app.py ask 'vintage graphic tee under $30'
 > ```
 >
-> All three tools are stubs, so that last command will do nothing useful yet.
-> That's the starting position.
+> All three tools are implemented. Unit 4 verifies the MCP search tool, failure handling,
+> five acceptance criteria, traced execution, and measured before/after improvement.
 >
 > **The rest of this file is your submission.** Fill it in as you go.
 
