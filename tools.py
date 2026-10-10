@@ -277,9 +277,11 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         f"Platform: {platform}\n"
         f"Style tags: {style_tags}\n"
         f"Outfit suggestion: {outfit.strip()}\n\n"
-        "Write a social caption of exactly 2 to 4 sentences. Mention the item, "
-        "the exact price, and the platform once each. Describe a specific styling "
-        "vibe based on the outfit. Keep it natural, concise, and post-ready."
+        "Write a social caption of exactly 2 to 4 sentences. Start the first "
+        "sentence with the item title exactly as written above, preserving its "
+        "words and punctuation rather than paraphrasing it. Mention the exact "
+        "price and platform once each. Describe a specific styling vibe based "
+        "on the outfit. Keep it natural, concise, and post-ready."
     )
     response = generate(
         prompt,
